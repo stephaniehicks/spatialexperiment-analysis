@@ -1,0 +1,233 @@
+---
+title: Analysis of 10x Visium mouse brain tissue (strain C57BL/6)
+author: "Stephanie Hicks"
+date: "12/2/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load libraries
+
+```{r}
+library(here)
+```
+
+
+# Motivation
+
+This [Visium data](https://support.10xgenomics.com/spatial-gene-expression/datasets/1.0.0/V1_Adult_Mouse_Brain) come from the 10x website and there is a short description provided: 
+
+> "10x Genomics obtained fresh frozen mouse brain tissue (Strain C57BL/6)from BioIVT Asterand. The tissue was embedded and cryosectioned as described in Visium Spatial Protocols - Tissue Preparation Guide (Demonstrated Protocol CG000240). Tissue sections of 10 µm thickness from a slice of the coronal plane were placed on Visium Gene Expression Slides."
+
+# Data 
+
+The goal here is to try using the candidate Bioconductor `SpatialCellExperiment` package [available on GitHub](https://github.com/kevinrue/SpatialCellExperiment). 
+First let's try setting up our folder structure. 
+
+```{r}
+if(!file.exists(here("data"))){
+      dir.create(here("data"))
+  }
+```
+
+## Download data 
+
+Next let's download some data. 
+The feature by barcode count matrix is available in two file formats. 
+We can try downloading the `.tar.gz` and the `.h5` file to explore what's in both files. 
+
+```{r}
+if(!file.exists(here("data", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.tar.gz"))){
+  tar_gz_file <- "http://cf.10xgenomics.com/samples/spatial-exp/1.0.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.tar.gz"
+  download.file(tar_gz_file, 
+                destfile = here("data", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.tar.gz"), 
+                method = "wget")
+}
+untar(tarfile = here("data", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.tar.gz"), 
+      exdir = here("data"))
+
+if(!file.exists(here("data", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.h5"))){
+  h5_file <- "http://cf.10xgenomics.com/samples/spatial-exp/1.0.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.h5"
+  download.file(h5_file, 
+                destfile = here("data", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.h5"), 
+                method = "wget")
+}
+
+if(!file.exists(here("data", "V1_Adult_Mouse_Brain_spatial.tar.gz"))){
+spatial_imaging_data <- "http://cf.10xgenomics.com/samples/spatial-exp/1.0.0/V1_Adult_Mouse_Brain/V1_Adult_Mouse_Brain_spatial.tar.gz"
+  download.file(spatial_imaging_data, 
+                destfile = here("data", "V1_Adult_Mouse_Brain_spatial.tar.gz"), 
+                method = "wget")
+}
+untar(tarfile = here("data", "V1_Adult_Mouse_Brain_spatial.tar.gz"), 
+      exdir = here("data"))
+
+```
+
+List contents of files to check it downloaded and extracted properly 
+```{r}
+list.files(here("data"))
+list.files(here("data", "filtered_feature_bc_matrix"))
+
+list.files(here("data", "spatial"))
+```
+
+Cool, there are images here in this last folder. Pulling this text from [here](https://support.10xgenomics.com/spatial-gene-expression/software/pipelines/latest/output/images), we get the following description of the images: 
+
+- `tissue_hires_image.png` and `tissue_lowres_image.png`: These files are downsampled versions of the original, full-resolution brightfield image provided by the user. Downsampling is accomplished by box filtering, which averages RGB values in patches of pixels in the full-resolution image to obtain an RGB value of one pixel in the downsampled image. The `tissue_hires_image.png` image has 2,000 pixels in its largest dimension, and the `tissue_lowres_image.png` has 600 pixels.
+- `aligned_fiducials.jpg`: This image has the dimensions of `tissue_hires_image.png`. Fiducial spots found by the fiducial alignment algorithm are highlighted in red. This file is useful to verify that fiducial alignment was successful.
+- `scalefactors_json.json`: This file contains the following fields:
+    - `tissue_hires_scalef`: A scaling factor that converts pixel positions in the original, full-resolution image to pixel positions in `tissue_hires_image.png`.
+    - `tissue_lowres_scalef`: A scaling factor that converts pixel positions in the original, full-resolution image to pixel positions in `tissue_lowres_image.png`.
+    - `fiducial_diameter_fullres`: The number of pixels that span the diameter of a fiducial spot in the original, full-resolution image.
+    - `spot_diameter_fullres`: The number of pixels that span the diameter of a tissue spot in the original, full-resolution image.
+- `detected_tissue_image.jpg`: This image has the dimensions of the tissue_hires_image.png and shows the following:
+    - Aligned fiducial spots as red, hollow circles.
+    - A blue bounding box. The interior marks the space where tissue versus not-tissue spots are searched for.
+    - Spots found under tissue are solid blue.
+    - Spots outside of tissue are solid gray.
+
+Let's look at two
+
+```{r}
+library(jpeg) # or png, depending on your image (replace readJPEG with readPNG)
+y <- readJPEG(here("data", "spatial", "aligned_fiducials.jpg")) 
+par(mfrow=c(2,2))
+image(y[,,1], main = "Channel 1", col = rgb(seq(0, 1, by = 0.05), 0, 0))
+image(y[,,2], main = "Channel 2", col = rgb(0, seq(0, 1, by = 0.05), 0))
+image(y[,,3], main = "Channel 3", col = rgb(0, 0, seq(0, 1, by = 0.05)))
+
+y <- readJPEG(here("data", "spatial", "detected_tissue_image.jpg"))
+par(mfrow=c(2,2))
+image(y[,,1], main = "Channel 1", col = rgb(seq(0, 1, by = 0.05), 0, 0))
+image(y[,,2], main = "Channel 2", col = rgb(0, seq(0, 1, by = 0.05), 0))
+image(y[,,3], main = "Channel 3", col = rgb(0, 0, seq(0, 1, by = 0.05)))
+```
+
+There is also spatial information about the barcodes. Pulling this text from [here](https://support.10xgenomics.com/spatial-gene-expression/software/pipelines/latest/output/images) we get a description 
+
+- `tissue_positions_list.csv`: This csv file contains a table with rows that correspond to spots. It has 4,992 rows, which is the number of spots in the spatial array. Columns, whose names are not specified in the file, correspond to the following fields:
+    - `barcode`: The sequence of the barcode associated to the spot.
+    - `in_tissue`: Binary, indicating if the spot falls inside (1) or outside (0) of tissue.
+    - `array_row`: The row coordinate of the spot in the array from 0 to 77. The array has 78 rows.
+    - `array_col`: The column coordinate of the spot in the array. In order to express the orange crate arrangement of the spots, this column index uses even numbers from 0 to 126 for even rows, and odd numbers from 1 to 127 for odd rows. Notice then that each row (even or odd) has 64 spots.
+    - `pxl_col_in_fullres`: The column pixel coordinate of the center of the spot in the full resolution image.
+    - `pxl_row_in_fullres`: The row pixel coordinate of the center of the spot in the full resolution image.
+
+```{r}
+barcode_loc <- readr::read_csv(here("data", "spatial", "tissue_positions_list.csv"), 
+                               col_names  = FALSE)
+colnames(barcode_loc) <- c("barcode", "in_tissue", "array_row", "array_col", 
+                           "pxl_col_in_fullres", "pxl_row_in_fullres")
+
+dim(barcode_loc) # 4992 spots on the Visium array
+head(barcode_loc)
+```
+
+
+## Install the `SpatialCellExperiment` repository 
+
+Next we install the `SpatialCellExperiment` package [available on GitHub](https://github.com/kevinrue/SpatialCellExperiment)
+
+```{r, eval=FALSE}
+devtools::install_github("kevinrue/SpatialCellExperiment")
+```
+
+and load the package
+
+```{r}
+library(SpatialCellExperiment)
+```
+
+Let's try running some test code on the website as a sanity check 
+
+```{r}
+ncells <- 100
+u <- matrix(rpois(20000, 5), ncol=ncells)
+
+coordinates <- matrix(runif(ncells*3), ncells)
+colnames(coordinates) <- c("x", "y", "z")
+
+sce <- SpatialCellExperiment(assays=list(counts=u), spatialDim=coordinates)
+sce
+```
+
+Yup, that worked. 
+
+As noted in the [vignette](https://github.com/kevinrue/SpatialCellExperiment/blob/master/vignettes/SpatialCellExperiment.Rmd), there is a `spatialDim` slot where the matrix of cell coordinates is stored. 
+
+```{r}
+head(spatialDim(sce))
+dim(spatialDim(sce))
+```
+
+## Create `SpatialCellExperiment` object with Visium data 
+
+First we load the feature by barcode counts matrix 
+
+### Load counts matrix using `.tar.gz` output from CellRanger 
+
+This will load the data into memory 
+
+```{r}
+library(DropletUtils)
+list.files(here("data", "filtered_feature_bc_matrix"))
+
+sce <- read10xCounts(here("data", "filtered_feature_bc_matrix"))
+sce
+
+counts(sce)[1:5, 1:5]
+```
+
+### Load counts matrix using `.h5` output from CellRanger
+
+We can check out the contents of the `.h5` file
+```{r}
+library(rhdf5)
+h5ls(here("data", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.h5"))
+```
+
+You could try to load individual files e.g. 
+```{r}
+library(rhdf5) 
+barcodes_matrix <- h5read(here("data","V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.h5"),
+       "matrix/barcodes")
+dim(barcodes_matrix) # 2698 barcodes 
+```
+
+However, this `sce` object will be created much faster and the e.g. counts matrix will load as a `DelayedArray` object, so not into memory. Let's go with this one. 
+```{r}
+library(DropletUtils)
+sce <- read10xCounts(here("data", "V1_Adult_Mouse_Brain_filtered_feature_bc_matrix.h5"))
+counts(sce)
+```
+
+Now let's put it all together. Let's try to coerce the `SingleCellExperiment` object into 
+a `SpatialCellExperiment` object. 
+
+```{r}
+barcode_loc <- barcode_loc[match(colData(sce)$Barcode, barcode_loc$barcode), ]
+
+spe <- as(sce, "SpatialCellExperiment")
+spatialDim(spe) <- barcode_loc[,-1]
+spe
+
+assays(spe)
+spatialDim(spe)
+counts(spe)
+```
+
+Tada! 
+
+# Quality control 
+
+
+# Summary
+
+```{r}
+sessionInfo()
+```
+
