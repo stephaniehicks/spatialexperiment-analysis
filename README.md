@@ -46,7 +46,7 @@ Code and analysis available [here](data-analyses/visium-mouse-brain-strain-C57BL
 
 ## Useful resources
 
-- [presentation from a student of Sten Linnarsson](https://nbisweden.github.io/single-cell_sib_scilifelab/session-outlook/Spatial_Lars-Borm_NBIS2019.pdf)
+- [presentation from Lars Borm (Linnarsson lab)](https://nbisweden.github.io/single-cell_sib_scilifelab/session-outlook/Spatial_Lars-Borm_NBIS2019.pdf)
 - [lit review by Ambrose](https://docs.google.com/spreadsheets/d/1tLTJrGul6p_4dpiT1_uU46HFCj-EE2mABXwSxqfCryQ/edit?usp=sharing) 
 - [slides from Ruben Dries on `giotto`](https://www.dropbox.com/s/4e0a9qrk8zhm900/191106_meetup_spatial_transcriptomics_small.pdf?dl=0)
 
